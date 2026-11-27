@@ -128,8 +128,9 @@ for part in $PARTS; do
     as_root python3 "$REPO_ROOT/tools/propset.py" "${propset_args[@]}" \
       || die "propset 失败：$part/$pf"
     if [ -f "$tsv" ]; then
-      while IFS=$'\t' read -r status key _value; do
-        [ -n "${status:-}" ] || continue
+      while IFS= read -r stat_line; do
+        [ -n "${stat_line:-}" ] || continue
+        status="${stat_line%%$'\t'*}"
         PROP_STATS["$part:$status"]=$(( ${PROP_STATS["$part:$status"]:-0} + 1 ))
       done < "$tsv"
       # 报告文件可能是 root 建的，读出来就够了

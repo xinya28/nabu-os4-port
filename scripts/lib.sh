@@ -124,26 +124,33 @@ is_sparse() {
 }
 
 # detect_fs <img> → erofs | ext4 | f2fs | sparse | unknown
+#
+# 偏移量容易记错，这里写清楚（都是字节，读出来的都是磁盘上的原始字节序）：
+#   EROFS superblock  magic 0xE0F5E1E2 @1024 → 字节 e2 e1 f5 e0
+#   F2FS  superblock  magic 0xF2F52010 @1024 → 字节 10 20 f5 f2
+#   ext4  superblock  magic 0xEF53     @1080 → 字节 53 ef
+# 之前把 erofs magic 当偏移 0 来读是个 bug：真机上所有 erofs 镜像都会被判成 unknown。
 detect_fs() {
-  local img="$1" magic
+  local img="$1" m1024 m1080
   if is_sparse "$img"; then echo "sparse"; return; fi
-  magic="$(od -An -tx1 -N4 "$img" | tr -d ' \n')"
-  case "$magic" in
-    e2e1f5e0) echo "erofs" ;;
-    e0f5e1e2) echo "erofs" ;;   # 小端读出顺序差异
-    53ef)     echo "ext4" ;;    # 0xEF53 在偏移 0x438，下面兜底再看
-    *)
-      # ext4 superblock magic 在 0x438 处
-      local m2
-      m2="$(od -An -tx2 -j0x438 -N2 "$img" | tr -d ' \n')"
-      case "$m2" in
-        53ef) echo "ext4" ;;
-        *)
-          if file -b "$1" 2>/dev/null | grep -qi 'erofs'; then echo "erofs"
-          elif file -b "$1" 2>/dev/null | grep -qi 'ext[234]'; then echo "ext4"
-          elif file -b "$1" 2>/dev/null | grep -qi 'f2fs'; then echo "f2fs"
-          else echo "unknown"; fi ;;
-      esac ;;
+
+  m1024="$(od -An -tx1 -j1024 -N4 "$img" 2>/dev/null | tr -d ' \n')"
+  case "$m1024" in
+    e2e1f5e0) echo "erofs"; return ;;
+    1020f5f2) echo "f2fs";  return ;;
+  esac
+
+  m1080="$(od -An -tx2 -j1080 -N2 "$img" 2>/dev/null | tr -d ' \n')"
+  case "$m1080" in
+    ef53|53ef) echo "ext4"; return ;;
+  esac
+
+  # 兜底：交给 file(1)，它对镜像格式的识别比手写 magic 更全
+  case "$(file -b "$img" 2>/dev/null)" in
+    *EROFS*) echo "erofs" ;;
+    *ext2*|*ext3*|*ext4*) echo "ext4" ;;
+    *F2FS*) echo "f2fs" ;;
+    *) echo "unknown" ;;
   esac
 }
 

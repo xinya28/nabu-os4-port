@@ -65,7 +65,13 @@ for st in ${STAGES//,/ }; do
       [ -n "$SOURCE_ID" ] && args+=(--source "$SOURCE_ID")
       run_stage "01 fetch" "${args[@]}" ;;
     02)
-      ROM_FILE="$(ls -1t "$WORK_ROOT/rom"/* 2>/dev/null | grep -v '\.json$' | head -1 || true)"
+      # 取 work/rom 里最新的那个非 json 文件（01 会写 fetch.json）
+      ROM_FILE=""
+      for f in "$WORK_ROOT/rom"/*; do
+        [ -f "$f" ] || continue
+        case "$f" in *.json) continue ;; esac
+        if [ -z "$ROM_FILE" ] || [ "$f" -nt "$ROM_FILE" ]; then ROM_FILE="$f"; fi
+      done
       [ -n "$ROM_FILE" ] || die "stage 02 找不到 ROM 文件（先跑 01）" 2
       run_stage "02 unpack" bash "$REPO_ROOT/scripts/02_unpack.sh" --input "$ROM_FILE" ;;
     03)

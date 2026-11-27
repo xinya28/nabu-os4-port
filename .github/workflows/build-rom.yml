@@ -96,7 +96,13 @@ jobs:
       - name: 02 unpack
         run: |
           set -euo pipefail
-          rom="$(ls -1t work/rom/* | grep -v '\.json$' | head -1)"
+          rom=""
+          for f in work/rom/*; do
+            [ -f "$f" ] || continue
+            case "$f" in *.json) continue ;; esac
+            if [ -z "$rom" ] || [ "$f" -nt "$rom" ]; then rom="$f"; fi
+          done
+          [ -n "$rom" ] || { echo "work/rom 里没有固件，01 失败了吗？" >&2; exit 1; }
           echo "input: $rom"
           bash scripts/02_unpack.sh --input "$rom"
 

@@ -63,7 +63,7 @@ erofs_original_params() {
 
 repack_erofs() {
   local root="$1" orig="$2" dest="$3"
-  local ctx params bs comp args=()
+  local ctx bs comp args=()
   ctx="$(merged_contexts)"
   read -r bs comp <<<"$(erofs_original_params "$orig")"
 
