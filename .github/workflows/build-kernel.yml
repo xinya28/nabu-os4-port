@@ -92,16 +92,13 @@ jobs:
           [ "${{ inputs.autosleep }}" = "false" ] && args+=(--no-autosleep)
           bash scripts/05_kernel.sh "${args[@]}"
 
-      - name: 内核身份自检
+      - name: 内核身份
         run: |
           set -euo pipefail
-          echo "--- version banner ---"
-          strings out/Image | grep -m1 '^Linux version' || true
-          echo "--- vermagic 相关配置 ---"
-          for s in CONFIG_SMP CONFIG_PREEMPT CONFIG_MODULE_UNLOAD CONFIG_MODVERSIONS CONFIG_LOCALVERSION CONFIG_MODULE_SIG; do
-            grep -E "^${s}=" out/.config 2>/dev/null || echo "${s} not set"
-          done
-          echo "--- aarch64 Image magic ---"
+          # 校验和身份信息都由 scripts/05_kernel.sh 落盘，这里只负责显示，
+          # 避免 CI 与脚本各写一套检查、路径一改就各说各话
+          cat out/kernel-info.txt
+          echo "--- aarch64 Image magic（偏移 56 应为 ARMd）---"
           dd if=out/Image bs=1 skip=56 count=4 status=none | xxd
           ls -lh out/
 

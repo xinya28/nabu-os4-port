@@ -20,7 +20,17 @@ vermagic 形如：
 结论：换 4.19/5.x 内核 ⇒ 厂商模块全部加载失败 ⇒ 触控/音频/WiFi 直接没有。
 所以内核段的目标不是"换版本"，而是"在同一个 base 上加东西"。
 
-`05_kernel.sh` 构建完会 grep 版本串里的 `4.14.180` 和 `modversions` 做自检。
+`05_kernel.sh` 构建完会检查 `$OUT/.config` 里的 `CONFIG_MODVERSIONS` / `CONFIG_MODULE_UNLOAD`，
+并把版本串与 vermagic 写进 `out/kernel-info.txt`。
+
+> 注意：vermagic 是**独立字符串**（`4.14.180-perf SMP preempt mod_unload modversions aarch64`），
+> 不在 `Linux version` 那一行里。第一版检查是去 `Linux version` 里找 `modversions` 的，
+> 于是对着正确的内核报"没开 modversions"——这种"检查写错、不是内核错"的假告警
+> 比不检查更糟，因为它会让人去改本来对的东西。
+>
+> 另外 `localversion` 实际会渲染成 `-perf-perf`：上游 `recovery/BUILD_METADATA.env`
+> 自己还会拼一段后缀。这不影响 vermagic 尾部校验（MODVERSIONS 下只比较尾部），
+> 只影响 `/proc/version` 的观感。
 
 ## 2. 构建与打包的物理约束
 

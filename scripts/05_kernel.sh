@@ -191,19 +191,59 @@ assert img[0x38:0x3c] == b"ARMd", "不是合法的 arm64 Image"
 PY
 fi
 
-# ── 6. 校验 ────────────────────────────────────────────────────────────────
+# ── 6. 校验 + 把产物收进 out/ ──────────────────────────────────────────────
 need_file "$BUILD_DIR/Image"
+# 裸 Image 是产物之一（AnyKernel 只装它；boot.img repack 也用它）
+cp -f "$BUILD_DIR/Image" "$OUT_ROOT/Image"
+
 banner="$(strings "$BUILD_DIR/Image" | grep -m1 '^Linux version' || true)"
-log "版本串: ${banner:-未找到}"
+# vermagic 是独立字符串，不在 "Linux version" 那一行里，
+# 形如 "4.14.180-perf-perf SMP preempt mod_unload modversions aarch64"
+vermagic="$(strings "$BUILD_DIR/Image" | grep -m1 -E '^4\.14\.[0-9]+[^ ]* (SMP|PREEMPT|preempt)' || true)"
+CFGFILE="$BUILD_DIR/.config"
+[ -f "$CFGFILE" ] || CFGFILE="$KERNEL_DIR/.config"
+
+log "版本串 : ${banner:-未找到}"
+log "vermagic: ${vermagic:-未找到}"
+
 prefix="$(cfg kernel/source.toml modules.required_vermagic_prefix)"
+MISSING=()
 case "$banner" in
   *"$prefix"*) ok "内核版本串包含 $prefix，与 vendor 模块同 base" ;;
-  *) warn "内核版本串不含 $prefix —— vendor 模块可能加载失败" ;;
+  *) warn "内核版本串不含 $prefix —— vendor 模块可能加载失败"; MISSING+=("$prefix") ;;
 esac
-case "$banner" in
-  *modversions*) ok "modversions 已开启" ;;
-  *) warn "版本串没有 modversions；vendor 模块加载会失败" ;;
-esac
+
+{
+  echo "generated   : $(now_iso)"
+  echo "branch      : $SRC_BRANCH"
+  echo "commit      : ${KERNEL_SHA:-unknown}"
+  echo "localversion: $LOCALVERSION"
+  echo "patches     : autosleep=$AUTOSLEEP perf=$PERF"
+  echo "banner      : ${banner:-未找到}"
+  echo "vermagic    : ${vermagic:-未找到}"
+  echo
+  echo "--- vermagic 相关配置（$CFGFILE）---"
+  if [ -f "$CFGFILE" ]; then
+    for s in CONFIG_SMP CONFIG_PREEMPT CONFIG_MODULE_UNLOAD CONFIG_MODVERSIONS \
+             CONFIG_LOCALVERSION CONFIG_MODULE_SIG CONFIG_KSU CONFIG_KPROBES; do
+      if grep -qE "^${s}=" "$CFGFILE"; then grep -E "^${s}=" "$CFGFILE"
+      elif grep -qE "^# ${s} is not set" "$CFGFILE"; then grep -E "^# ${s} is not set" "$CFGFILE"
+      else echo "${s} 未出现在配置里"; fi
+    done
+  else
+    echo "找不到 .config"
+  fi
+} > "$OUT_ROOT/kernel-info.txt"
+
+# modversions 必须看 .config，不能看版本串：vermagic 里带 modversions 才是真的开了
+if [ -f "$CFGFILE" ] && grep -qE '^CONFIG_MODVERSIONS=y' "$CFGFILE"; then
+  ok "CONFIG_MODVERSIONS=y（vendor 模块的符号 CRC 校验能对上）"
+else
+  warn "CONFIG_MODVERSIONS 未开启 —— vendor 模块很可能加载失败（见 docs/KERNEL.md 第 1 节）"
+fi
+if grep -qE '^CONFIG_MODULE_UNLOAD=y' "$CFGFILE" 2>/dev/null; then
+  ok "CONFIG_MODULE_UNLOAD=y（vermagic 里的 mod_unload 对齐）"
+fi
 
 # ── 7. 打包 ────────────────────────────────────────────────────────────────
 KERNEL_SHA="${KERNEL_SHA:-$(git -C "$KERNEL_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)}"
