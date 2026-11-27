@@ -90,11 +90,15 @@ if [ "${#missing_req[@]}" -gt 0 ] || [ "${#missing_img[@]}" -gt 0 ]; then
     if [ "${#pkgs[@]}" -gt 0 ]; then
       uniq_pkgs="$(printf '%s\n' "${pkgs[@]}" | sort -u | tr '\n' ' ')"
       info "apt-get install: $uniq_pkgs"
+      # update 失败不等于装不上：runner 上 packages.microsoft.com 偶发 403，
+      # 而 Ubuntu 主源通常已经拉过索引。所以 update 容错，install 才是硬要求。
       if [ "$(id -u)" -eq 0 ]; then
-        apt-get update -qq && apt-get install -y --no-install-recommends $uniq_pkgs
+        apt-get update -qq -o Acquire::Retries=3 || warn "apt-get update 有源失败，继续用已有索引"
+        apt-get install -y --no-install-recommends $uniq_pkgs || die "apt-get 安装失败"
       else
-        sudo -n apt-get update -qq && sudo -n apt-get install -y --no-install-recommends $uniq_pkgs
-      fi || die "apt-get 安装失败"
+        sudo -n apt-get update -qq -o Acquire::Retries=3 || warn "apt-get update 有源失败，继续用已有索引"
+        sudo -n apt-get install -y --no-install-recommends $uniq_pkgs || die "apt-get 安装失败"
+      fi
       # 装完复查，避免包名拼错但 apt 返回 0
       for t in "${missing_req[@]}" "${missing_img[@]}"; do
         have "$t" || die "安装后仍然缺少 $t"

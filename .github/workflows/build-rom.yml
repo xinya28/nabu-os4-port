@@ -90,10 +90,16 @@ jobs:
 
       - name: 安装依赖
         run: |
-          sudo apt-get update
+          # runner 镜像里预置了 packages.microsoft.com 源，偶发 403 会让 apt-get update
+          # 整体失败（实测：E: Failed to fetch .../noble/InRelease 403 Forbidden）。
+          # 我们不用 .NET/Azure CLI，直接摘掉这些源；update 再兜一层容错。
+          sudo rm -f /etc/apt/sources.list.d/microsoft*.list \
+                     /etc/apt/sources.list.d/azure*.list 2>/dev/null || true
+          sudo apt-get update -o Acquire::Retries=3 \
+            || echo "::warning::apt-get update 有源失败，继续用已有索引"
           sudo apt-get install -y --no-install-recommends \
             erofs-utils android-sdk-libsparse-utils zstd zip unzip \
-            python3 curl file xxd coreutils nodejs \
+            python3 curl file xxd coreutils \
             bc bison flex libssl-dev libelf-dev libncurses-dev cpio \
             gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu git xz-utils
 

@@ -25,7 +25,11 @@ jobs:
 
       - name: 安装工具
         run: |
-          sudo apt-get update
+          # 同 build-rom：microsoft 源偶发 403，会导致 apt-get update 整体失败
+          sudo rm -f /etc/apt/sources.list.d/microsoft*.list \
+                     /etc/apt/sources.list.d/azure*.list 2>/dev/null || true
+          sudo apt-get update -o Acquire::Retries=3 \
+            || echo "::warning::apt-get update 有源失败，继续用已有索引"
           sudo apt-get install -y --no-install-recommends \
             erofs-utils android-sdk-libsparse-utils zstd shellcheck python3 file xxd \
             python3-yaml
