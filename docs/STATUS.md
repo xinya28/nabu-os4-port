@@ -17,7 +17,7 @@
 | 05 kernel | ✅ **已在真机验证** | 同一套补丁/配置/打包路径在此前的内核 CI 上构建并 `fastboot boot` 验证（详见 KERNEL.md 第 5 节） |
 | 06 package | 🧪 已实现，未实跑 | 切分 + 重建 SHA256SUMS 的逻辑未在 >2 GiB 产物上验证过 |
 | 07 verify | 🧪 已实现，未实跑 | boot.img 的结构断言（header v3 / ARMd）逻辑正确，但未跑过真实产物 |
-| lint / selftest | 🧪 已实现 | 首次 push 后由 Actions 给出结论 |
+| lint / selftest | ✅ **CI 已通过** | 2026-11-27 `lint` run #4（commit `d0fa5c8`）：shellcheck 0 告警、python 语法、`selftest.sh` 全绿（含 mkfs.erofs→detect_fs→dump.erofs 往返） |
 
 ## 2. 关键结论
 
