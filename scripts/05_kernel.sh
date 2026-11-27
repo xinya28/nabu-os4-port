@@ -135,11 +135,15 @@ else
   fi
 
   # ── 4. 工具链 ────────────────────────────────────────────────────────────
-  if [ -n "${CC:-}" ] && [ -n "${LLVM_BIN:-}" ] && [ -d "$LLVM_BIN" ]; then
-    export PATH="$LLVM_BIN:$PATH"
-  elif [ "$DOWNLOAD_LLVM" = "1" ] || ! have clang; then
-    LLVM_DIR="$TOOLS_DIR/llvm"
-    if [ ! -x "$LLVM_DIR/bin/clang" ]; then
+  # 上游 build-recovery.sh 第 8 行是 `: "${LLVM_BIN:?...}"`，然后自己
+  # export PATH="$LLVM_BIN:$PATH"。也就是说：**只把 clang 放进 PATH 不够**，
+  # 必须显式给它 LLVM_BIN，否则构建在第一个 make 之前就退出（报错信息还只有
+  # 一行 "Provide absolute path to ..."，很容易被当成缺 clang）。
+  LLVM_DIR="$TOOLS_DIR/llvm"
+  if [ -z "${LLVM_BIN:-}" ] || [ ! -x "${LLVM_BIN:-/nonexistent}/clang" ]; then
+    if [ -x "$LLVM_DIR/bin/clang" ]; then
+      LLVM_BIN="$LLVM_DIR/bin"
+    elif [ "$DOWNLOAD_LLVM" = "1" ] || ! have clang; then
       need_cmd curl
       info "下载 LLVM $CLANG_VER"
       url="https://github.com/llvm/llvm-project/releases/download/llvmorg-${CLANG_VER}/LLVM-${CLANG_VER}-Linux-X64.tar.xz"
@@ -148,10 +152,17 @@ else
       mkdir -p "$LLVM_DIR"
       tar -xJf "$tmp/llvm.tar.xz" -C "$LLVM_DIR" --strip-components=1 || die "LLVM 解压失败"
       rm -rf "$tmp"
+      LLVM_BIN="$LLVM_DIR/bin"
+    else
+      LLVM_BIN="$(dirname "$(command -v clang)")"
     fi
-    export PATH="$LLVM_DIR/bin:$PATH"
-    ok "LLVM: $("$LLVM_DIR/bin/clang" --version | head -1)"
   fi
+  [ -x "$LLVM_BIN/clang" ] || die "找不到 clang：用 --download-llvm，或设置 LLVM_BIN 指向 LLVM $CLANG_VER 的 bin 目录"
+  export LLVM_BIN
+  export PATH="$LLVM_BIN:$PATH"
+  ok "LLVM: $(clang --version | head -1)  ($LLVM_BIN)"
+  # 上游会硬性检查这几个工具的版本串里带 20.1.8
+  ld.lld --version >/dev/null 2>&1 || die "llvm bin 目录里没有 ld.lld（$LLVM_BIN）"
 
   # ── 5. 编译 ──────────────────────────────────────────────────────────────
   need_file "$KERNEL_DIR/$BUILD_SCRIPT"
