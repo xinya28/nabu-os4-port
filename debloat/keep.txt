@@ -1,0 +1,60 @@
+# 保护名单 —— 任何 profile 都不允许删除这些包
+#
+# 03_debloat.sh 的行为是：先把 profile 选中的集合算出来，再和本文件求交集；
+# 只要有交集就 **报错退出**（exit 3），而不是"跳过并继续"。
+# 这样 debloat/packages.txt 里手滑写错一行，不会变成一次静默的 bootloop 构建。
+#
+# 这些包一旦缺失，后果不是"少个功能"，而是开机进不去或者权限体系崩掉。
+
+# 桌面 / 系统 UI / 通知 / 设置
+com.miui.home
+com.android.systemui
+com.miui.notification
+com.android.settings
+com.miui.securitycore
+com.lbe.security.miui
+com.android.permissioncontroller
+
+# 包管理 / 安装器 / 权限（缺了装不了任何 APK，也修不了系统）
+com.miui.packageinstaller
+com.android.packageinstaller
+com.google.android.packageinstaller
+
+# 电源 / 性能 / 温控（缺了会掉帧、发热、充不进电）
+com.miui.powerkeeper
+com.qualcomm.qti.performance
+
+# 框架与系统服务（system_server 直接依赖）
+android
+com.android.providers.settings
+com.android.providers.media.module
+com.android.providers.downloads
+com.android.providers.contacts
+com.android.providers.telephony
+com.android.providers.media
+com.android.shell
+com.android.externalstorage
+com.android.documentsui
+com.android.mtp
+
+# MIUI 框架分支（主题/资源/字体/小部件宿主，删了桌面与设置都会崩）
+com.miui.core
+com.miui.system
+com.miui.daemon
+com.miui.maml
+com.miui.contentextension
+com.miui.systemui.overlay.devices.android
+com.miui.systemui.overlay.devices.android.tablet
+
+# 图形 / 音频 / 输入法的 HAL 前端（缺了没画面、没声音、没输入法）
+com.android.inputmethod.latin
+com.sohu.inputmethod.sogou.xiaomi
+com.qualcomm.qti.qms.service.telemetry
+com.qualcomm.qcrilmsgtunnel
+
+# 平板专属（nabu 上的分屏/自由窗口/手写笔框架）
+com.miui.freeform
+com.miui.pad
+com.miui.pad.service
+com.miui.stylus
+com.miui.stylus.service

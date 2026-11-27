@@ -1,0 +1,41 @@
+# 内核源码与工具链
+#
+# 本仓库不含内核源码：CI 在运行时按这里 clone 上游、打补丁、出包。
+# 基线是 PerezChilli/android_kernel_xiaomi_nabu —— 它本身已经是
+# "4.14.180 + nabu 设备树 + HyperOS 适配"的树，nabu 的触控/笔/键盘盖
+# 驱动都在里面，所以"移植内核并整合平板驱动"这件事的主体是它，
+# 本仓库负责的是：补丁、配置片段、打包，以及把驱动相关的已知结论固定下来
+# （见 docs/KERNEL.md）。
+
+[source]
+repo           = "https://github.com/PerezChilli/android_kernel_xiaomi_nabu.git"
+default_branch = "nabu-w-oss-bks"
+# 构建入口（相对内核树根）
+build_script   = "recovery/scripts/build-recovery.sh"
+# 构建产物（相对构建输出目录）
+image_out      = "arch/arm64/boot/Image.gz-dtb"
+# 基线配置（相对内核树根）
+config_ref     = "recovery/profile-reference.config"
+
+[toolchain]
+# 与 ROM 自带内核同一个大版本，减少 clang 新诊断导致的 -Werror 失败
+clang = "20.1.8"
+# 交叉编译器只在 clang 不可用时兜底
+cross_compile = "aarch64-linux-gnu-"
+
+[patches]
+# 屏幕状态门控 autosleep：两项必须一起应用，只改 autosleep_state 初值不会真的挂起
+autosleep_default = "kernel/patches/0001-autosleep-default-mem.patch"
+autosleep_gate    = "kernel/patches/0002-autosleep-screen-gate.patch"
+# 0002 是"新增文件"补丁，Makefile 的编译项由 05_kernel.sh 追加（不放进补丁，
+# 避免内核 Makefile 被上游重排时空补丁 apply 失败）
+
+[configs]
+perf    = "kernel/configs/perf.fragment"
+suspend = "kernel/configs/suspend.fragment"
+
+[modules]
+# vendor 分区里的模块是用 4.14.180 + modversions 编的，宿主内核必须同 base，
+# 否则 vermagic 的尾部校验和符号 CRC 都对不上（见 docs/KERNEL.md）
+required_vermagic_prefix = "4.14.180"
+modversions              = true

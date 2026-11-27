@@ -1,0 +1,39 @@
+Copyright (C) 2026 the nabu-kernel-ci contributors
+
+This repository (build workflow definitions, configuration fragments, patches
+and helper scripts) is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the Free
+Software Foundation, version 2 of the License only.
+
+It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE.  See the GNU General Public License for more details.
+
+The full text of GPL-2.0 is available at:
+    https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt
+
+SPDX-License-Identifier: GPL-2.0-only
+
+-------------------------------------------------------------------------------
+
+Note on the kernel sources and build output
+
+The Linux kernel source used by this pipeline is distributed under the GNU
+General Public License, version 2 (GPL-2.0).  The kernel patches in this
+repository are derivative works of that source and are therefore also licensed
+under GPL-2.0.
+
+Any kernel image (`Image`) or boot image produced by this pipeline is a
+derivative of the Linux kernel and is consequently distributed under GPL-2.0.
+Corresponding source is available from:
+
+    https://github.com/PerezChilli/android_kernel_xiaomi_nabu
+
+plus the patch files in this repository.  Build artifacts are reproducible from
+the workflow inputs documented in README.md.
+
+KernelSU components embedded in the build come from:
+    https://github.com/Baka-SU/BakaSU
+
+Boot image repacking is based on the Android boot image format
+(header v3); see tools/repack_boot.js.

@@ -1,0 +1,40 @@
+# 移植层清单
+#
+# 这个文件回答一个问题：**哪一部分来自 OS4 源机型，哪一部分留在 nabu 自己身上。**
+# 04_port.sh 按这里的声明做组装、注入和校验，报告里会逐条回显，便于复核。
+
+[port]
+name    = "nabu-os4-hybrid"
+# 为什么是 hybrid 而不是"整个 super 直接搬"：见 docs/PORTING.md 第 1 节。
+# 一句话：vendor 里的 HAL、内核模块、firmware 是绑着 SM8150 的，
+# 搬一台骁龙 8 系平板的 vendor 过来，内核连面板都点不亮。
+
+[keep_from_target]
+# 这些分区必须来自 nabu 自己的固件（用户自己提供，仓库不分发二进制）
+parts = ["vendor", "odm", "vendor_dlkm", "dtbo", "vendor_boot", "vbmeta", "vbmeta_system"]
+note  = "由 --target-firmware 指向，仅记录 sha256 用于复现，不复制进产物"
+
+[from_source]
+# 这些分区来自 OS4 源机型，经过 03 精简 + 本 stage 注入
+parts = ["system", "product", "system_ext"]
+
+[props]
+# 应用属性后写的文件（相对分区根）
+files     = ["build.prop", "system/build.prop"]
+# 属性表
+table     = "port/props/nabu.prop"
+# 允许覆盖源机型已有的同名 key
+overwrite = true
+
+[overlay]
+# 目录结构：port/overlay/<分区>/<相对路径> → 覆盖到该分区同名路径
+dir = "port/overlay"
+
+[validate]
+# 若 build.prop 指定了 ro.vndk.version，system 里必须有 lib64/vndk-<ver>，
+# 否则 linker 在 init 第一步就找不到 vendor 依赖的库 —— 这类失败连 logcat 都没有。
+require_vndk_dir            = true
+# 平板形态必须保留，否则 OS4 会按手机布局加载资源
+require_tablet_characteristic = true
+# false = 缺项只报警告（首次试移植用）；CI 正式构建传 --strict 变 true
+fail_on_missing             = false

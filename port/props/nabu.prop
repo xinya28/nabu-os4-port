@@ -1,0 +1,47 @@
+# 移植层属性表
+#
+# 格式：  key=value
+#   - `#` 开头是注释
+#   - 值里可以有空格（按第一个 `=` 切分，值原样保留，不再 strip 中间空格）
+#   - 会写进 [props].files 列出的每个 build.prop；已存在则按 overwrite 决定是否替换
+#
+# 每一条都写清楚"为什么"，因为改错这里的代价比改脚本更隐蔽：
+# 属性错了不会报错，只会表现成开机动画卡住。
+
+# ── 设备身份：让 OS4 的框架认为自己在 nabu 上 ─────────────────────────────
+# 不改这个，源机型的 ro.product.device 会让 Settings/相机/OTA 去加载不存在的资源，
+# 同时 /vendor/build.prop 里的 ro.vendor.product.device=nabu 会和系统侧对不上，
+# init 会刷 "product mismatch" 并把部分 vendor 服务标成 disabled。
+ro.product.device=nabu
+ro.build.product=nabu
+ro.product.board=nabu
+ro.product.name=nabu
+ro.product.model=Xiaomi Pad 5
+ro.product.brand=Xiaomi
+ro.product.manufacturer=Xiaomi
+
+# ── vendor ABI：整个移植里最关键的两个值 ─────────────────────────────────
+# nabu 的 vendor 是 Android 13（API 33）。OS4 是 Android 17，
+# 如果 system 侧继续声明自己的 vndk 版本，linker 会去 /system/lib64/vndk-37
+# 找 libbase/libcutils 之类，而 vendor 的 HAL 是按 33 编译的，直接起不来。
+# 改这两个值之前，先确认 system 里真的有 lib64/vndk-33（04_port.sh 会检查）。
+ro.vndk.version=33
+ro.board.api_level=33
+
+# ── 形态 ──────────────────────────────────────────────────────────────────
+# OS4 的平板源本来就是 tablet，但 hybrid 之后 Resources 会按 product 分区重新判定；
+# 显式写死避免被源机型的 build.prop 覆盖成 handheld，导致布局变成手机抽屉。
+ro.build.characteristics=tablet
+
+# ── 关掉源机型硬件、nabu 没有的开关 ──────────────────────────────────────
+# 这些 key 在不同 OS4 版本里可能不存在；写进去只是"声明没有"，不存在的 key 无副作用。
+ro.miui.has_nfc=false
+ro.miui.has_ir=false
+ro.miui.has_cellular=false
+ro.miui.support_esim=false
+
+# ── 可选：调试期用 ────────────────────────────────────────────────────────
+# 打开后 boot 阶段会把 init 的 debug 日志全打到 kmsg，串口/ramoops 能看到更多信息。
+# 正式包务必注释掉。
+# persist.sys.log.level=debug
+# ro.debuggable=1

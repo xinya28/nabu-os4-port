@@ -1,0 +1,78 @@
+diff --git a/kernel/power/nabu_autosleep_gate.c b/kernel/power/nabu_autosleep_gate.c
+new file mode 100644
+index 0000000..1810fb4
+--- /dev/null
++++ b/kernel/power/nabu_autosleep_gate.c
+@@ -0,0 +1,72 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Screen-state gate for autosleep on the Xiaomi Pad 5 (nabu) HyperOS port.
++ *
++ * autosleep suspends as soon as the last wakelock is released.  The ported
++ * ROM does not hold a wakelock while the display is on, so arming autosleep
++ * unconditionally makes the device suspend and resume in a loop during use;
++ * on screen that shows up as a black flash every few seconds.
++ *
++ * Arm autosleep only after the display has been powered down, and disarm it
++ * as soon as the display is about to come back on.
++ */
++
++#define pr_fmt(fmt)	"nabu-autosleep: " fmt
++
++#include <linux/init.h>
++#include <linux/kernel.h>
++#include <linux/types.h>
++#include <linux/notifier.h>
++#include <linux/suspend.h>
++#include <drm/drm_notifier.h>
++
++#include "power.h"
++
++static struct notifier_block nabu_autosleep_nb;
++
++static int nabu_autosleep_drm_cb(struct notifier_block *nb,
++				 unsigned long event, void *data)
++{
++	struct drm_notify_data *evdata = data;
++	int *blank;
++
++	if (!evdata || !evdata->data)
++		return NOTIFY_DONE;
++
++	blank = evdata->data;
++
++	if (event == DRM_EVENT_BLANK && *blank == DRM_BLANK_POWERDOWN) {
++		pr_info("display off, arming autosleep\n");
++		pm_autosleep_set_state(PM_SUSPEND_MEM);
++	} else if (event == DRM_EARLY_EVENT_BLANK &&
++		   *blank == DRM_BLANK_UNBLANK) {
++		pr_info("display on, disarming autosleep\n");
++		pm_autosleep_set_state(PM_SUSPEND_ON);
++	}
++
++	return NOTIFY_OK;
++}
++
++static int __init nabu_autosleep_gate_init(void)
++{
++	int ret;
++
++	/*
++	 * The build may default autosleep_state to PM_SUSPEND_MEM, but on its
++	 * own that only changes what /sys/power/autosleep reports.  Keep the
++	 * autosleep workqueue disarmed until the display state is known.
++	 */
++	pm_autosleep_set_state(PM_SUSPEND_ON);
++
++	nabu_autosleep_nb.notifier_call = nabu_autosleep_drm_cb;
++	ret = drm_register_client(&nabu_autosleep_nb);
++	if (ret) {
++		pr_err("drm_register_client failed: %d, autosleep stays off\n",
++		       ret);
++		return 0;
++	}
++
++	pr_info("screen-state gate registered, autosleep off until screen off\n");
++	return 0;
++}
++late_initcall(nabu_autosleep_gate_init);

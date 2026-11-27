@@ -1,0 +1,96 @@
+# 澎湃OS 4 平板精简清单
+#
+# 格式：  <tier>  <package>   [# 说明]
+#   - 只有 tier 被当前 profile 选中时才会尝试删除
+#   - 包里不存在的条目会被静默忽略（不同机型/版本的组件差异很大）
+#   - 匹配依据是 APK 里的 package 名（tools/pkgscan.py 解析 AXML），不是目录名，
+#     所以不需要你在这里猜目录
+#   - 删除前请先看构建产物 out/debloat-report.txt：它按"命中/未命中"分别列出
+#
+# 这份清单是按 澎湃OS 3/4 的常见组件整理的，**不是从某一份具体固件 dump 出来的**。
+# 第一次针对某个源固件跑的时候，先跑 profile=minimal，再照着报告里的
+# "未命中"清单补齐/删掉条目，然后才上 balanced。
+#
+# 以 # 开头是注释；同一行多写内容用空格分隔，第 3 个字段起都是说明
+# （说明里不要再出现空格以外的分隔符，脚本按空白切分）
+
+# ── 应用层：小米自家内容/工具 App ──────────────────────────────────────────
+safe        com.miui.video                  # 小米视频
+safe        com.miui.player                 # 音乐
+safe        com.miui.notes                  # 笔记
+safe        com.miui.compass                # 指南针
+safe        com.miui.fm                     # 收音机（平板无 FM 硬件时是空壳）
+safe        com.miui.soundrecorder          # 录音机
+safe        com.miui.bugreport              # 用户反馈
+safe        com.miui.miservice              # 服务与反馈
+safe        com.miui.mediaeditor            # 相册内的图片编辑组件
+safe        com.miui.screenrecorder         # 屏幕录制
+safe        com.miui.android.fashiongallery # 壁纸轮播（锁屏画报）
+safe        com.miui.virtualsim             # 小米移动虚拟号
+safe        com.miui.smarttravel            # 出行助手
+safe        com.miui.thirdappassistant      # 三方应用助手
+
+# ── 预装商店 / 游戏 / 广告 / 统计 ─────────────────────────────────────────
+safe        com.xiaomi.market               # 应用商店
+safe        com.xiaomi.mipicks              # GetApps
+safe        com.xiaomi.gamecenter           # 游戏中心
+safe        com.xiaomi.gamecenter.sdk.service
+safe        com.xiaomi.mircs                # 小米 RCS（国内基本不可用）
+safe        com.miui.msa.global             # MSA 广告 SDK
+safe        com.miui.systemAdSolution       # 系统广告
+safe        com.miui.analytics              # 使用统计
+safe        com.miui.hybrid                 # 快应用框架
+safe        com.miui.hybrid.accessory       # 快应用附属
+safe        com.android.chrome              # 出厂自带 Chrome
+safe        com.android.bips                # 系统打印
+safe        com.android.printspooler
+safe        com.android.printservice.recommendation
+safe        com.android.egg                 # 彩蛋
+safe        com.android.dreams.basic        # 屏保
+safe        com.android.dreams.phototable
+safe        com.android.stk                 # SIM 卡工具包（Wi-Fi 版平板无卡）
+safe        com.android.cellbroadcastreceiver # 小区广播（无蜂窝时无用）
+safe        com.android.bookmarkprovider
+
+# ── 账号 / 云 / 推送：收益大但会断掉跨设备能力 ─────────────────────────────
+aggressive  com.xiaomi.account              # 小米账号（会连带断掉云服务/查找设备）
+aggressive  com.xiaomi.xmsf                 # 小米推送（删了第三方 App 推送全断）
+aggressive  com.xiaomi.xmsfkeeper
+aggressive  com.miui.cloudservice           # 云服务
+aggressive  com.miui.cloudbackup
+aggressive  com.miui.cloudservice.sysbase
+aggressive  com.miui.securitycenter         # ⚠ 见 keep.txt —— 永远不要放进任何 profile
+
+# ── 相册 / 相机 / 壁纸：删了会掉功能，但系统仍可用 ────────────────────────
+balanced    com.miui.gallery                # 相册（相机拍完跳转依赖它）
+balanced    com.miui.videoplayer            # 视频播放器（相册/文件管理器调起）
+balanced    com.miui.miwallpaper            # 壁纸选择器（删了「设置-壁纸」会崩）
+balanced    com.miui.wallpaper.earth
+balanced    com.miui.themestore             # 主题商店
+balanced    com.android.thememanager
+balanced    com.miui.calculator             # 计算器
+balanced    com.miui.weather2               # 天气（桌面小部件依赖）
+balanced    com.miui.personalassistant      # 负一屏/智能助理
+balanced    com.miui.contentcatcher         # 传送门
+balanced    com.miui.touchassistant         # 悬浮球
+balanced    com.miui.voiceassist            # 小爱同学
+balanced    com.miui.guardprovider          # AVL 病毒扫描（安全中心引用）
+balanced    com.miui.securityadd
+balanced    com.miui.cleaner
+balanced    com.miui.backup                 # 本地备份
+balanced    com.miui.mishare.connectivity   # 小米互传
+balanced    com.xiaomi.mirror               # 跨设备互联/投屏
+balanced    com.xiaomi.trustservice
+balanced    com.miui.wallet                 # 钱包（平板无 NFC，收益高）
+balanced    com.miui.tsmclient              # 交通卡（需要 NFC）
+balanced    com.miui.nextpay
+balanced    com.xiaomi.scanner              # 扫一扫
+balanced    com.miui.fmservice
+balanced    com.miui.audiomonitor
+
+# ── 需要按机型确认的（先留在这里，命中报告会告诉你这份固件有没有） ────────
+# 下面这些在部分平板上是系统框架的一部分，删之前务必看报告和真机回归
+# balanced  com.miui.daemon
+# balanced  com.miui.securitycore
+# balanced  com.miui.packageinstaller
+# balanced  com.miui.powerkeeper

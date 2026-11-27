@@ -1,0 +1,55 @@
+name: lint
+
+# 不碰 ROM、不碰真机的快速门禁：语法、配置键、工具语义、erofs 往返。
+# 目的是让"脚本本身写错"在 2 分钟内暴露，而不是在 350 分钟的 ROM 构建末尾。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  selftest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装工具
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            erofs-utils android-sdk-libsparse-utils zstd shellcheck python3 file xxd
+
+      - name: shellcheck
+        run: |
+          shellcheck --version
+          # SC1091: source 的文件在运行期才存在；
+          # SC2086 等保持默认开启——流水线里未加引号的变量真会出问题。
+          shellcheck -S warning -e SC1091 \
+            scripts/*.sh kernel/scripts/*.sh
+
+      - name: python 语法
+        run: |
+          python3 -m py_compile tools/*.py
+          node --check tools/repack_boot.js
+
+      - name: 自检
+        run: bash scripts/selftest.sh
+
+      - name: 配置可解析
+        run: |
+          set -euo pipefail
+          for f in config/target/nabu.toml config/sources.toml config/profiles.toml \
+                   port/manifest.toml kernel/source.toml; do
+            python3 -c "import tomllib,sys; tomllib.load(open(sys.argv[1],'rb'))" "$f"
+            echo "ok $f"
+          done

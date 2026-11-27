@@ -1,0 +1,116 @@
+name: build-kernel
+
+# 只构建内核段（4.14.180 + 平板驱动整合 + 屏幕状态门控 autosleep）。
+# 不依赖 ROM，跑得快，用来验证 kernel/patches、kernel/configs 与 05_kernel.sh 的一致性。
+#
+# 产物：AnyKernel3 zip（Recovery/管理器内刷入）、裸 Image、SHA256SUMS。
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "内核源码分支"
+        required: true
+        default: nabu-w-oss-bks
+        type: choice
+        options:
+          - nabu-w-oss-bks   # BakaSU + SUSFS
+          - nabu-w-oss-bk    # 仅 BakaSU
+          - nabu-w-oss       # 无 root
+      localversion:
+        description: "UTS release 后缀（空 = -perf）"
+        required: false
+        default: "-perf"
+        type: string
+      perf:
+        description: "应用 perf.fragment（BBR/fq_codel/BFQ）"
+        required: true
+        default: true
+        type: boolean
+      autosleep:
+        description: "应用 autosleep 补丁（熄屏挂起 + 屏幕状态门控）"
+        required: true
+        default: true
+        type: boolean
+      ksu_version:
+        description: "固定 KSU_VERSION（例 35171；空 = 树内默认）"
+        required: false
+        default: ""
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - "kernel/**"
+      - "scripts/05_kernel.sh"
+      - "scripts/lib.sh"
+      - "scripts/image_lib.sh"
+      - "tools/repack_boot.js"
+      - ".github/workflows/build-kernel.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kernel-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: kernel (${{ inputs.branch || 'nabu-w-oss-bks' }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 释放磁盘空间
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost \
+                      "$AGENT_TOOLSDIRECTORY/CodeQL" || true
+          sudo apt-get clean
+          df -h /
+
+      - name: 安装编译依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison flex libssl-dev libelf-dev libncurses-dev cpio \
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
+            git curl xz-utils zip unzip python3 file
+
+      - name: 构建内核
+        env:
+          BRANCH: ${{ inputs.branch || 'nabu-w-oss-bks' }}
+          LOCALVERSION: ${{ inputs.localversion || '-perf' }}
+          KSU_VERSION: ${{ inputs.ksu_version }}
+        run: |
+          set -euo pipefail
+          args=(--branch "$BRANCH" --download-llvm --jobs "$(nproc)")
+          [ -n "${LOCALVERSION:-}" ] && args+=(--localversion "$LOCALVERSION")
+          [ -n "${KSU_VERSION:-}" ] && args+=(--ksu-version "$KSU_VERSION")
+          [ "${{ inputs.perf }}" = "false" ] && args+=(--no-perf)
+          [ "${{ inputs.autosleep }}" = "false" ] && args+=(--no-autosleep)
+          bash scripts/05_kernel.sh "${args[@]}"
+
+      - name: 内核身份自检
+        run: |
+          set -euo pipefail
+          echo "--- version banner ---"
+          strings out/Image | grep -m1 '^Linux version' || true
+          echo "--- vermagic 相关配置 ---"
+          for s in CONFIG_SMP CONFIG_PREEMPT CONFIG_MODULE_UNLOAD CONFIG_MODVERSIONS CONFIG_LOCALVERSION CONFIG_MODULE_SIG; do
+            grep -E "^${s}=" out/.config 2>/dev/null || echo "${s} not set"
+          done
+          echo "--- aarch64 Image magic ---"
+          dd if=out/Image bs=1 skip=56 count=4 status=none | xxd
+          ls -lh out/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nabu-kernel-${{ github.run_number }}
+          path: |
+            out/*.zip
+            out/Image
+            out/SHA256SUMS.kernel
+          if-no-files-found: error
+          retention-days: 30

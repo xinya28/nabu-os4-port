@@ -1,0 +1,26 @@
+# 精简档位
+#
+# tier 是"删错了会怎样"的分级，不是"占多少空间"的分级：
+#   safe       —— 纯用户态应用，删掉只是少一个图标，框架不引用它
+#   balanced   —— 有框架/系统应用会间接引用（相册、相机、桌面小部件等），
+#                 删掉后对应功能退化，但系统能正常启动和使用
+#   aggressive —— 触及账号、推送、云服务、安全组件，删除收益大、副作用也大
+#
+# `keep` 永远优先于 `remove`：debloat/keep.txt 里的包一旦出现在待删列表，
+# 03_debloat.sh 直接报错退出（不是静默跳过），避免悄悄删掉关键组件。
+
+[profile.none]
+tiers   = []
+desc    = "不动系统，只做移植；用于排除精简引入的变量"
+
+[profile.minimal]
+tiers   = ["safe"]
+desc    = "只删纯应用层，风险最低；建议第一次跑 ROM 用这档"
+
+[profile.balanced]
+tiers   = ["safe", "balanced"]
+desc    = "默认档；删掉相册/视频/云服务这类可替代组件"
+
+[profile.aggressive]
+tiers   = ["safe", "balanced", "aggressive"]
+desc    = "连账号/推送/安全组件一起删；会改变系统行为，需真机回归"

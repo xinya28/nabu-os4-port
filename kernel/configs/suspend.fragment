@@ -1,0 +1,12 @@
+# nabu suspend-only overlay
+#
+# Intended for builds that should stay as close as possible to the kernel the
+# ROM already ships: no TCP/IO/compiler tuning, no debug disables, no KernelSU
+# change. Only screen-off suspend is added.
+#
+# CONFIG_PM_SLEEP is already enabled in the stock config, but 4.14 does not
+# expose /sys/power/autosleep unless PM_AUTOSLEEP is also set. With autosleep
+# the kernel suspends as soon as the last wakelock is released, which does not
+# depend on the ported ROM's SystemSuspend/wakeup_count path being intact.
+
+CONFIG_PM_AUTOSLEEP=y

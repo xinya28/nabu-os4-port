@@ -1,0 +1,15 @@
+diff --git a/kernel/power/autosleep.c b/kernel/power/autosleep.c
+--- a/kernel/power/autosleep.c
++++ b/kernel/power/autosleep.c
+@@ -12,5 +12,10 @@
+ 
+ #include "power.h"
+ 
+-static suspend_state_t autosleep_state;
++/*
++ * Default to suspend-to-RAM: enter suspend as soon as the last wakelock is
++ * released, without relying on the ported ROM's SystemSuspend service.
++ * Userspace can still disable it with: echo off > /sys/power/autosleep
++ */
++static suspend_state_t autosleep_state = PM_SUSPEND_MEM;
+ static struct workqueue_struct *autosleep_wq;

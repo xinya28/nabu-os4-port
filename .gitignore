@@ -1,0 +1,27 @@
+# 构建产物
+out/
+work/
+*.img
+*.zip
+!tools/*.zip
+*.log
+
+# 工具链与临时文件
+.tools/
+node_modules/
+__pycache__/
+*.pyc
+
+# 本地固件（体积大、受版权保护，绝不入库）
+firmware/
+rom/
+*.bin
+*.tar.md5
+*.tgz
+!tools/*.bin
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

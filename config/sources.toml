@@ -1,0 +1,49 @@
+# 源机型登记表 —— 澎湃OS 4（Android 17）平板
+#
+# 用途：给 build-rom.yml 的 `source` 选择项提供 id → 显示名/谱系的映射，
+# 以及记录"这台机器的 system 侧与 nabu 差在哪"。
+#
+# 注意：这里不含、也不要放 ROM 下载地址。ROM 一律由 workflow_dispatch 的
+# rom_url 传入（或用你自己的 Release 资产），原因是小米 CDN 的直链带时效签名，
+# 写死在仓库里必然过期。
+#
+# `recommended` 只是一个默认值，不代表技术上最优：
+# 选源机型时优先看 ①有没有 tablet 专属框架（so 比例、平行视界）
+# ②屏幕分辨率/DPI 是否接近 nabu 的 2560x1600@320 ← 越接近，overlay 越少。
+
+[[source]]
+id          = "pad8"
+model       = "Xiaomi Pad 8"
+os          = "OS4 / Android 17"
+recommended = true
+note        = "OS4 首批机型；tablet 框架最完整，作为默认基线"
+
+[[source]]
+id   = "pad8pro"
+model = "Xiaomi Pad 8 Pro"
+os   = "OS4 / Android 17"
+note = "与 pad8 同代，系统镜像差异主要在性能配置与相机，可互为备份源"
+
+[[source]]
+id   = "pad7"
+model = "Xiaomi Pad 7"
+os   = "OS4 第三批 / Android 17"
+note = "11.2 英寸 3200x2136，分辨率比 nabu 高一档，overlay 里要压 dpi"
+
+[[source]]
+id   = "pad7pro"
+model = "Xiaomi Pad 7 Pro"
+os   = "OS4 第三批 / Android 17"
+note = "与 pad7 同分辨率；带键盘/笔的配件框架，笔相关组件值得参考"
+
+[[source]]
+id   = "pad6spro"
+model = "Xiaomi Pad 6S Pro 12.4"
+os   = "OS4 第三批 / Android 17"
+note = "12.4 英寸 3048x2032；大屏布局，作 backup 源"
+
+[[source]]
+id   = "kpad2"
+model = "REDMI K Pad 2"
+os   = "OS4 / Android 17"
+note = "8.8 英寸小屏，分辨率最接近 nabu 的纵向像素数；作对照源"

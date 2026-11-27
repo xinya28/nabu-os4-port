@@ -1,0 +1,176 @@
+name: build-rom
+
+# 完整链路：取源固件 → 解包 → 精简 → 移植注入 → 内核 → 打包 → 自检。
+#
+# 需要你提供 rom_url（小米 CDN 直链带时效，不能写死在仓库里）。
+# 产物按 1.8GB 自动切分，避免撞 artifact 的单文件上限。
+
+on:
+  workflow_dispatch:
+    inputs:
+      rom_url:
+        description: "OS4 源固件地址（OTA zip 优先；也接受 Release 资产直链）"
+        required: true
+        type: string
+      rom_sha256:
+        description: "源固件 sha256（强烈建议填；5GB 下载被截断很常见）"
+        required: false
+        default: ""
+        type: string
+      source:
+        description: "源机型（决定报告里的谱系标注）"
+        required: true
+        default: pad8
+        type: choice
+        options: [pad8, pad8pro, pad7, pad7pro, pad6spro, kpad2]
+      debloat_profile:
+        description: "精简档位"
+        required: true
+        default: balanced
+        type: choice
+        options: [none, minimal, balanced, aggressive]
+      build_kernel:
+        description: "同时构建内核（关闭则只出 system 侧）"
+        required: true
+        default: true
+        type: boolean
+      strict:
+        description: "移植层校验失败即中止（首次试移植建议关闭）"
+        required: true
+        default: false
+        type: boolean
+      release_tag:
+        description: "非空则把产物发到 Release（例 v0.1-pad8）"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rom-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: rom (${{ inputs.source }} / ${{ inputs.debloat_profile }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 释放磁盘空间
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost \
+                      /opt/hostedtoolcache/go /opt/hostedtoolcache/node \
+                      "$AGENT_TOOLSDIRECTORY/CodeQL" || true
+          sudo apt-get clean
+          df -h /
+
+      - name: 安装依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            erofs-utils android-sdk-libsparse-utils zstd zip unzip \
+            python3 curl file xxd coreutils \
+            bc bison flex libssl-dev libelf-dev libncurses-dev cpio \
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu git xz-utils
+
+      - name: 00 preflight
+        run: bash scripts/00_preflight.sh --install --min-free-gb 25
+
+      - name: 01 fetch
+        env:
+          ROM_URL: ${{ inputs.rom_url }}
+          ROM_SHA: ${{ inputs.rom_sha256 }}
+          SRC: ${{ inputs.source }}
+        run: |
+          set -euo pipefail
+          args=(--url "$ROM_URL" --source "$SRC")
+          [ -n "${ROM_SHA:-}" ] && args+=(--sha256 "$ROM_SHA")
+          bash scripts/01_fetch.sh "${args[@]}"
+
+      - name: 02 unpack
+        run: |
+          set -euo pipefail
+          rom="$(ls -1t work/rom/* | grep -v '\.json$' | head -1)"
+          echo "input: $rom"
+          bash scripts/02_unpack.sh --input "$rom"
+
+      - name: 03 debloat
+        run: bash scripts/03_debloat.sh --profile "${{ inputs.debloat_profile }}"
+
+      - name: 04 port
+        run: |
+          set -euo pipefail
+          args=()
+          [ "${{ inputs.strict }}" = "true" ] && args+=(--strict)
+          bash scripts/04_port.sh "${args[@]}"
+
+      - name: 05 kernel
+        if: ${{ inputs.build_kernel }}
+        run: bash scripts/05_kernel.sh --download-llvm --jobs "$(nproc)"
+
+      - name: 06 package
+        run: bash scripts/06_package.sh --version "${{ inputs.source }}-${{ github.run_number }}"
+
+      - name: 07 verify
+        run: bash scripts/07_verify.sh
+
+      - name: 摘要
+        if: always()
+        run: |
+          {
+            echo "## nabu-os4-port 构建结果"
+            echo
+            echo "| 项 | 值 |"
+            echo "| --- | --- |"
+            echo "| 源机型 | ${{ inputs.source }} |"
+            echo "| 精简档位 | ${{ inputs.debloat_profile }} |"
+            echo "| 内核 | ${{ inputs.build_kernel }} |"
+            echo "| run | #${{ github.run_number }} |"
+            echo
+            for f in out/ported/port-report.md work/debloated/debloat-report.txt out/verify-report.txt; do
+              [ -f "$f" ] || continue
+              echo "<details><summary>$f</summary>"
+              echo
+              echo '```'
+              head -80 "$f"
+              echo '```'
+              echo
+              echo "</details>"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nabu-os4-${{ inputs.source }}-${{ github.run_number }}
+          path: |
+            out/package/*
+            out/ported/port-report.md
+            out/ported/port-manifest.json
+            out/verify-report.txt
+            out/pipeline-summary.txt
+            out/*.zip
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: 发布到 Release
+        if: ${{ inputs.release_tag != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" out/package/* --clobber
+          else
+            gh release create "$TAG" out/package/* \
+              --title "nabu-os4-port $TAG" \
+              --notes "源机型 ${{ inputs.source }}，精简档位 ${{ inputs.debloat_profile }}，run #${{ github.run_number }}。
+          仅镜像级自检通过，未在真机验证。刷写前请读包内 README-FLASH.txt。"
+          fi

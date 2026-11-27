@@ -1,0 +1,55 @@
+# 目标设备：小米平板 5（nabu）
+#
+# 这里只记录"事实"，不放任何厂商二进制。设备相关的判定都从这里读，
+# 脚本里不要写死代号或分区名。
+# 标 ⚠ 的字段是尚未在本机核对过的，改动前先在真机 confirm。
+
+[device]
+codename        = "nabu"
+model           = "Xiaomi Pad 5"
+brand           = "Xiaomi"
+soc             = "SM8150-AC"          # Snapdragon 860
+kernel_series   = "4.14.180"
+ab              = true                 # A/B 无缝更新
+dynamic_parts   = true                 # super 分区 + 逻辑分区
+has_cellular    = false                # Wi-Fi 版；不要指望 telephony 全链路
+has_nfc         = false
+has_fingerprint = false
+
+# nabu 最后一版官方固件的 vendor 是 Android 13 / API 33。
+# 移植层要保证 OS4 的 system 侧不越过这层 vendor ABI：
+#   ro.vndk.version   → vendor 侧 VNDK 版本
+#   ro.board.api_level→ vendor API level（Android 12 起由 bootloader/vendor 决定）
+# 这两个值错了，system_server 起来之前就会因为链接失败死在 linker。
+[vendor]
+api_level       = 33
+vndk_version    = "33"
+module_layout   = "modversions"         # vendor 模块 vermagic 带 modversions（CRC 校验符号）
+
+[display]
+width   = 2560
+height  = 1600
+density = 320
+diagonal_inch = 11.0
+
+# 启动镜像的物理约束（改内核时必须复核）
+[boot]
+header_version     = 3
+kernel_format      = "raw"              # 未压缩 arm64 Image，magic @0x38 = "ARMd"
+dtb_location       = "vendor_boot"      # boot 分区不放 dtb，不要往 Image 后面拼 dtb
+ramdisk_in_boot    = true
+
+[partitions]
+# 从目标设备保留（nabu 自己的固件）
+keep  = ["vendor", "odm", "vendor_dlkm", "vbmeta", "vbmeta_system", "dtbo", "vendor_boot"]
+# 从源机型取（OS4 的 system 侧）
+take  = ["system", "product", "system_ext"]
+# 由本仓库内核段生成
+build = ["boot"]
+
+[filesystems]
+# auto = 解包后按镜像头部判定（erofs / ext4 / f2fs），不要假设
+system     = "auto"
+product    = "auto"
+system_ext = "auto"
+vendor     = "ext4"

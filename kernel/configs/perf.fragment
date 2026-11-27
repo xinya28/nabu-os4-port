@@ -1,0 +1,45 @@
+# nabu performance overlay
+#
+# Appended to recovery/profile-reference.config before `make olddefconfig`.
+# Every entry is a stock upstream 4.14 option: nothing here patches source code,
+# so vendor modules keep loading and existing features stay intact. Symbols that
+# do not exist on this tree are dropped silently by olddefconfig - check
+# out/reference-config.diff in the build artifact to see what really landed.
+
+# --- TCP: BBR + fair queueing (better throughput / lower latency on wifi+lte) ---
+# BBR is hidden behind the TCP_CONG_ADVANCED menuconfig on 4.14, so it has to be
+# enabled first; CUBIC stays built in as the fallback algorithm.
+CONFIG_TCP_CONG_ADVANCED=y
+CONFIG_TCP_CONG_CUBIC=y
+CONFIG_TCP_CONG_BBR=y
+CONFIG_DEFAULT_BBR=y
+CONFIG_NET_SCH_FQ=y
+CONFIG_NET_SCH_FQ_CODEL=y
+CONFIG_NET_SCH_PIE=y
+
+# --- zram: 4.14 picks the algorithm at runtime via comp_algorithm,
+#     so only the crypto primitives need to be present (lz4 already built in) ---
+CONFIG_CRYPTO_LZ4HC=y
+
+# --- block layer: make BFQ available for /sys/block/*/queue/scheduler ---
+# Default stays CFQ, so nothing changes unless the ROM explicitly selects BFQ.
+CONFIG_IOSCHED_BFQ=y
+
+# --- keep the build lean: no debug instrumentation, no size optimisation ---
+CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y
+# CONFIG_CC_OPTIMIZE_FOR_SIZE is not set
+# CONFIG_DEBUG_INFO is not set
+# CONFIG_SLUB_DEBUG is not set
+# CONFIG_SCHED_DEBUG is not set
+# CONFIG_FUNCTION_TRACER is not set
+# --- KPROBES must stay ON: KernelSU non-GKI builds install their su/ksud hooks
+#     with register_kprobe(). kernel/ksu.c only calls ksu_sucompat_init() and
+#     ksu_ksud_init() under #ifdef CONFIG_KPROBES, so turning this off silently
+#     produces a kernel with no /system/bin/su at all. The overhead is only the
+#     handful of registered probes, not the kprobes framework itself.
+CONFIG_KPROBES=y
+# CONFIG_KPROBES_SANITY_TEST is not set
+# CONFIG_OPTPROBES is not set
+# --- screen-off suspend lives in configs/suspend.fragment so that a build with
+#     perf_overlay=false can still get autosleep without any tuning.
+# CONFIG_PM_WAKELOCKS_GC is not set
