@@ -5,6 +5,7 @@
 #
 #   scripts/03_debloat.sh [--images work/images] [--profile balanced]
 #                         [--parts system,product] [--out work/debloated]
+#                         [--list debloat/packages.txt] [--keep debloat/keep.txt]
 #                         [--dry-run] [--keep-extracted]
 #
 # 做三件事，每件都可单独核对：
@@ -12,13 +13,90 @@
 #   2. 按 profile 选中 tier，与 keep 名单求差集后删除 APK 目录；
 #   3. 用原镜像的参数（块大小 / 压缩 / file_contexts）重新生成 erofs。
 #
-# 安全阀：profile 选中的包若命中 debloat/keep.txt，直接 exit 3，不做删除。
+# 安全阀：profile 选中的包若命中 debloat/keep.txt，直接 exit 3，不删任何文件。
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/image_lib.sh"
 
-# ── 3. 上下文收集 / 重打包：实现在 scripts/image_lib.sh ────────────────────
+IMAGES="$WORK_ROOT/images"
+PROFILE="balanced"
+LIST="$REPO_ROOT/debloat/packages.txt"
+KEEP="$REPO_ROOT/debloat/keep.txt"
+OUT="$WORK_ROOT/debloated"
+PARTS=""
+DRY=0
+KEEP_EXTRACTED=0
 
-# ── 4. 逐分区处理
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --images)         IMAGES="$2"; shift 2 ;;
+    --profile)        PROFILE="$2"; shift 2 ;;
+    --parts)          PARTS="$2"; shift 2 ;;
+    --out)            OUT="$2"; shift 2 ;;
+    --list)           LIST="$2"; shift 2 ;;
+    --keep)           KEEP="$2"; shift 2 ;;
+    --dry-run)        DRY=1; shift ;;
+    --keep-extracted) KEEP_EXTRACTED=1; shift ;;
+    -h|--help)        sed -n '2,16p' "$0"; exit 0 ;;
+    *) die "未知参数 $1" 2 ;;
+  esac
+done
+
+prepare_dirs
+stage_banner "03 debloat (profile=$PROFILE)"
+need_file "$LIST"
+need_file "$KEEP"
+need_dir "$IMAGES" "先跑 scripts/02_unpack.sh"
+
+EXTRACT="$WORK_ROOT/extract"
+SELINUX_DIR="$WORK_ROOT/selinux"
+export SELINUX_DIR
+mkdir -p "$OUT" "$WORK_ROOT/debloat" "$EXTRACT" "$SELINUX_DIR"
+
+# ── 1. profile → tier 集合 ─────────────────────────────────────────────────
+TIERS=""
+if [ "$PROFILE" != "none" ]; then
+  TIERS="$(python3 "$REPO_ROOT/tools/cfg.py" get "$REPO_ROOT/config/profiles.toml" "profile.$PROFILE.tiers" "")"
+  [ -n "$TIERS" ] || die "未知 profile '$PROFILE'（可选：none / minimal / balanced / aggressive）" 2
+fi
+log "profile=$PROFILE tiers=[${TIERS:-无}]"
+
+# ── 2. 生成待删集合 ────────────────────────────────────────────────────────
+WANTED="$WORK_ROOT/debloat/wanted.txt"
+: > "$WANTED"
+while IFS= read -r raw || [ -n "$raw" ]; do
+  line="$(strip_comment "$raw")"
+  [ -z "$line" ] && continue
+  read -r tier pkg _rest <<<"$line"
+  [ -n "${pkg:-}" ] || continue
+  case " $TIERS " in
+    *" $tier "*) printf '%s\n' "$pkg" >> "$WANTED" ;;
+  esac
+done < "$LIST"
+
+declare -A KEEPSET=()
+while IFS= read -r raw || [ -n "$raw" ]; do
+  line="$(strip_comment "$raw")"
+  [ -z "$line" ] && continue
+  read -r pkg _rest <<<"$line"
+  [ -n "${pkg:-}" ] && KEEPSET["$pkg"]=1
+done < "$KEEP"
+
+# ── 3. 安全阀：待删 ∩ 保护名单 → 立刻中止 ─────────────────────────────────
+conflicts=()
+while IFS= read -r pkg; do
+  [ -n "$pkg" ] || continue
+  if [ -n "${KEEPSET[$pkg]:-}" ]; then conflicts+=("$pkg"); fi
+done < "$WANTED"
+
+if [ "${#conflicts[@]}" -gt 0 ]; then
+  for c in "${conflicts[@]}"; do printf '  - %s\n' "$c" >&2; done
+  die "debloat/packages.txt 与 debloat/keep.txt 冲突（上面这些包不许删）。
+     这是配置错误，不是运行时错误：把该行从 packages.txt 删掉，或从 keep.txt 移除。
+     构建已中止，未删除任何文件。" 3
+fi
+ok "保护名单检查通过（待删 $(wc -l < "$WANTED" | tr -d ' ') 个包，无冲突）"
+
+# ── 4. 逐分区处理 ──────────────────────────────────────────────────────────
 [ -n "$PARTS" ] || PARTS="$(cfg config/target/nabu.toml partitions.take)"
 REPORT="$OUT/debloat-report.txt"
 SUMMARY="$OUT/debloat-summary.json"
@@ -89,9 +167,11 @@ for part in $PARTS; do
   fi
 
   if [ -s "$MISSES" ]; then
-    echo >> "$REPORT"
-    echo "这份固件里不存在（清单条目未命中，可能是别的机型/版本）：" >> "$REPORT"
-    sed 's/^/  - /' "$MISSES" >> "$REPORT"
+    {
+      echo
+      echo "这份固件里不存在（清单条目未命中，可能是别的机型/版本）："
+      sed 's/^/  - /' "$MISSES"
+    } >> "$REPORT"
   fi
   echo >> "$REPORT"
 
@@ -108,11 +188,7 @@ for part in $PARTS; do
   tmp_img="$OUT/.$part.img.tmp"
   rm -f "$tmp_img"
   info "[$part] 重打包（已删 $n_hit 个包，回收 $(human "$saved")）"
-  case "$fs" in
-    erofs) repack_erofs "$root" "$img" "$tmp_img" ;;
-    ext4)  repack_ext4 "$root" "$tmp_img" "$part" ;;
-    f2fs)  die "f2fs 重打包未实现（$part）；这类分区请用 profile=none 跳过精简" ;;
-  esac
+  repack_image "$root" "$img" "$tmp_img" "$fs" "$part"
   mv -f "$tmp_img" "$out_img"
   out_size="$(bytes_of "$out_img")"
   log "[$part] $(human "$in_size") → $(human "$out_size")"
@@ -127,7 +203,7 @@ for part in $PARTS; do
   if [ "$KEEP_EXTRACTED" = "0" ]; then rm -rf "$root"; fi
 done
 
-# profile=none 或 dry-run 之外，把未处理的分区原样带过去，下游 stage 只认 OUT
+# profile=none / dry-run 之外，把未处理的分区原样带过去：下游只认 $OUT
 if [ "$DRY" = "0" ]; then
   for f in "$IMAGES"/*.img; do
     [ -f "$f" ] || continue
@@ -136,13 +212,14 @@ if [ "$DRY" = "0" ]; then
   done
 fi
 
-# ── 5. 汇总
+# ── 5. 汇总 ────────────────────────────────────────────────────────────────
 {
   printf '{\n  "generated_at": "%s",\n  "profile": "%s",\n  "tiers": "%s",\n  "dry_run": %s,\n' \
     "$(now_iso)" "$PROFILE" "$TIERS" "$([ "$DRY" = "1" ] && echo true || echo false)"
   printf '  "saved_bytes_total": %s,\n  "parts": [\n' "$total_saved"
   first=1
-  for row in "${summary_rows[@]}"; do
+  for row in "${summary_rows[@]:-}"; do
+    [ -n "$row" ] || continue
     IFS='|' read -r p in_s out_s n saved status <<<"$row"
     [ "$first" = "1" ] || printf ',\n'
     first=0

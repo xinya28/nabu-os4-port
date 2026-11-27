@@ -110,7 +110,7 @@ if have mkfs.erofs && have dump.erofs; then
   if as_root mkfs.erofs -b 4096 --mount-point=/ "$TMP/test.img" "$TMP/root" >/dev/null 2>&1 \
      || mkfs.erofs -b 4096 --mount-point=/ "$TMP/test.img" "$TMP/root" >/dev/null 2>&1; then
     check grep -qx erofs <<<"$(detect_fs "$TMP/test.img")"
-    check dump.erofs --stat "$TMP/test.img"
+    check dump.erofs -S "$TMP/test.img"
   else
     warn "mkfs.erofs 跑不起来，跳过（本机缺 erofs-utils？）"
   fi

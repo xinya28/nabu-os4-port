@@ -72,7 +72,7 @@ for f in "${imgs[@]}"; do
     *)
       case "$fs" in
         erofs)
-          if dump.erofs --stat "$f" >/dev/null 2>&1; then
+          if dump.erofs -S "$f" >/dev/null 2>&1; then
             ok "$name：erofs 可解析（$(human "$size")）"
           else
             fail "$name：erofs 无法解析"

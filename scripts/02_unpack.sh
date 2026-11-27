@@ -79,8 +79,8 @@ fi
 if [ -f "$SCRATCH/payload.bin" ]; then
   [ -x "$PDG" ] || die "需要 payload-dumper-go 解 payload.bin：先跑 scripts/00_preflight.sh --install"
   info "payload.bin → $(basename "$OUTDIR")"
-  # -o 输出目录；--workers 由 CPU 数决定，CI 上 4 核足够
-  "$PDG" -o "$OUTDIR" -w "$(nproc)" "$SCRATCH/payload.bin" \
+  # -c 是并发 worker 数（不是 -w；payload-dumper-go 的短选项见 --help）
+  "$PDG" -o "$OUTDIR" -c "$(nproc)" "$SCRATCH/payload.bin" \
     || die "payload-dumper-go 失败"
   ok "payload 解出 $(ls -1 "$OUTDIR"/*.img 2>/dev/null | wc -l) 个分区"
 fi

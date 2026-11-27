@@ -77,7 +77,8 @@ repack_erofs() {
 
   log "mkfs.erofs -b $bs ${comp:-不压缩}$( [ -n "$ctx" ] && echo ' + contexts' )"
   as_root mkfs.erofs "${args[@]}" "$dest" "$root" || die "mkfs.erofs 失败（$root）"
-  dump.erofs --stat "$dest" >/dev/null 2>&1 || die "生成的 erofs 校验失败：$dest"
+  # dump.erofs 的统计开关是 -S（-s 是 superblock，没有 --stat 这个长选项）
+  dump.erofs -S "$dest" >/dev/null 2>&1 || die "生成的 erofs 校验失败：$dest"
 }
 
 repack_ext4() {
