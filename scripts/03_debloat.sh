@@ -60,6 +60,27 @@ if [ "$PROFILE" != "none" ]; then
 fi
 log "profile=$PROFILE tiers=[${TIERS:-无}]"
 
+# ── 0. profile=none：不解包、不重打包，直接透传 ────────────────────────────
+# 这不是优化而是语义问题：重新解包再重打包一遍，即使一个文件都没删，也会
+# 换掉时间戳、可能换掉压缩参数，让"我只想验证移植、排除精简变量"这件事失去意义。
+if [ "$PROFILE" = "none" ]; then
+  info "profile=none：不精简，原镜像直接透传到 $OUT"
+  for f in "$IMAGES"/*.img; do
+    [ -f "$f" ] || continue
+    cp -f "$f" "$OUT/$(basename "$f")"
+  done
+  {
+    echo "# debloat report"
+    echo
+    echo "- generated: $(now_iso)"
+    echo "- profile  : none（未做任何修改，镜像原样透传）"
+  } > "$OUT/debloat-report.txt"
+  printf '{\n  "generated_at": "%s",\n  "profile": "none",\n  "dry_run": false,\n  "saved_bytes_total": 0,\n  "parts": []\n}\n' \
+    "$(now_iso)" > "$OUT/debloat-summary.json"
+  ok "精简已跳过（profile=none）"
+  exit 0
+fi
+
 # ── 2. 生成待删集合 ────────────────────────────────────────────────────────
 WANTED="$WORK_ROOT/debloat/wanted.txt"
 : > "$WANTED"

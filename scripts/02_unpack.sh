@@ -16,12 +16,14 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 INPUT=""
 OUTDIR="$WORK_ROOT/images"
 KEEP_LIST=""
+ONLY=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --input) INPUT="$2"; shift 2 ;;
     --out)   OUTDIR="$2"; shift 2 ;;
     --keep)  KEEP_LIST="$2"; shift 2 ;;
+    --only)  ONLY="$2"; shift 2 ;;
     -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
     *) die "未知参数 $1" 2 ;;
   esac
@@ -80,7 +82,14 @@ if [ -f "$SCRATCH/payload.bin" ]; then
   [ -x "$PDG" ] || die "需要 payload-dumper-go 解 payload.bin：先跑 scripts/00_preflight.sh --install"
   info "payload.bin → $(basename "$OUTDIR")"
   # -c 是并发 worker 数（不是 -w；payload-dumper-go 的短选项见 --help）
-  "$PDG" -o "$OUTDIR" -c "$(nproc)" "$SCRATCH/payload.bin" \
+  # -p 只解指定分区：OS4 的 OTA 包 9-10 GB，全解会白占 3-4 GB
+  #    （vendor/odm 用 nabu 自己的，源机型的那份解出来也没有用）
+  pdg_args=(-o "$OUTDIR" -c "$(nproc)")
+  if [ -n "$ONLY" ]; then
+    pdg_args+=(-p "$ONLY")
+    info "只解这些分区：$ONLY"
+  fi
+  "$PDG" "${pdg_args[@]}" "$SCRATCH/payload.bin" \
     || die "payload-dumper-go 失败"
   ok "payload 解出 $(ls -1 "$OUTDIR"/*.img 2>/dev/null | wc -l) 个分区"
 fi

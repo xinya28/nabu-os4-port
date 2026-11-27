@@ -2,33 +2,51 @@ name: build-rom
 
 # 完整链路：取源固件 → 解包 → 精简 → 移植注入 → 内核 → 打包 → 自检。
 #
-# 需要你提供 rom_url（小米 CDN 直链带时效，不能写死在仓库里）。
-# 产物按 1.8GB 自动切分，避免撞 artifact 的单文件上限。
+# 两种给固件的方式，二选一：
+#   1. rom_url 直接给直链（推荐用于固定复现：把 zip 放到你自己的 Release 里再填资产链接）
+#   2. rom_url 留空 → 用 source(代号) 去 XiaomiFirmwareUpdater 的索引里解析最新 OS4 包，
+#      并自动挑一个能通的镜像域名（实测 bigota/hugeota 会 403，cdnorg 正常）
+#
+# 产物按 1.8 GiB 自动切分，避免撞 artifact 的单文件上限。
 
 on:
   workflow_dispatch:
     inputs:
-      rom_url:
-        description: "OS4 源固件地址（OTA zip 优先；也接受 Release 资产直链）"
+      source:
+        description: "源机型代号（rom_url 为空时用它解析固件；也是报告里的谱系）"
         required: true
-        type: string
-      rom_sha256:
-        description: "源固件 sha256（强烈建议填；5GB 下载被截断很常见）"
+        default: yupei
+        type: choice
+        options:
+          - yupei      # Xiaomi Pad 8 / Pad 9（中国）
+          - piano      # Xiaomi Pad 8 Pro
+          - uke        # Xiaomi Pad 7
+          - muyu       # Xiaomi Pad 7 Pro
+          - jinghu     # Xiaomi Pad 7 Ultra
+          - violin     # Xiaomi Pad 7S Pro 12.5
+          - yili       # REDMI K Pad 2
+          - yingtian   # Xiaomi Pad 9 Pro Max
+      rom_url:
+        description: "固件直链（留空 = 按 source 自动解析）"
         required: false
         default: ""
         type: string
-      source:
-        description: "源机型（决定报告里的谱系标注）"
-        required: true
-        default: pad8
-        type: choice
-        options: [pad8, pad8pro, pad7, pad7pro, pad6spro, kpad2]
+      rom_sha256:
+        description: "固件 sha256（留空 = 不校验，只记录）"
+        required: false
+        default: ""
+        type: string
       debloat_profile:
         description: "精简档位"
         required: true
-        default: balanced
+        default: minimal
         type: choice
         options: [none, minimal, balanced, aggressive]
+      parts_only:
+        description: "只解这些分区（省 3-4 GB 磁盘）"
+        required: true
+        default: "system,product,system_ext,boot"
+        type: string
       build_kernel:
         description: "同时构建内核（关闭则只出 system 侧）"
         required: true
@@ -40,7 +58,7 @@ on:
         default: false
         type: boolean
       release_tag:
-        description: "非空则把产物发到 Release（例 v0.1-pad8）"
+        description: "非空则把产物发到 Release（例 v0.1-uke）"
         required: false
         default: ""
         type: string
@@ -75,25 +93,49 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             erofs-utils android-sdk-libsparse-utils zstd zip unzip \
-            python3 curl file xxd coreutils \
+            python3 curl file xxd coreutils nodejs \
             bc bison flex libssl-dev libelf-dev libncurses-dev cpio \
             gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu git xz-utils
 
+      - name: 解析固件地址
+        id: resolve
+        env:
+          SRC: ${{ inputs.source }}
+          ROM_URL: ${{ inputs.rom_url }}
+        run: |
+          set -euo pipefail
+          url="${ROM_URL:-}"
+          if [ -z "$url" ]; then
+            # findrom 会打印"能通的那个镜像"的完整 URL（stderr 上是候选镜像的探测结果）
+            url="$(node tools/findrom.js --device "$SRC" --check | tail -1)"
+          fi
+          [ -n "$url" ] || { echo "解析不到固件地址" >&2; exit 1; }
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          {
+            echo "### 固件"
+            echo
+            echo '```'
+            echo "$url"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: 00 preflight
-        run: bash scripts/00_preflight.sh --install --min-free-gb 25
+        run: bash scripts/00_preflight.sh --install --min-free-gb 30
 
       - name: 01 fetch
         env:
-          ROM_URL: ${{ inputs.rom_url }}
+          URL: ${{ steps.resolve.outputs.url }}
           ROM_SHA: ${{ inputs.rom_sha256 }}
           SRC: ${{ inputs.source }}
         run: |
           set -euo pipefail
-          args=(--url "$ROM_URL" --source "$SRC")
+          args=(--url "$URL" --source "$SRC")
           [ -n "${ROM_SHA:-}" ] && args+=(--sha256 "$ROM_SHA")
           bash scripts/01_fetch.sh "${args[@]}"
 
       - name: 02 unpack
+        env:
+          ONLY: ${{ inputs.parts_only }}
         run: |
           set -euo pipefail
           rom=""
@@ -104,7 +146,9 @@ jobs:
           done
           [ -n "$rom" ] || { echo "work/rom 里没有固件，01 失败了吗？" >&2; exit 1; }
           echo "input: $rom"
-          bash scripts/02_unpack.sh --input "$rom"
+          args=(--input "$rom")
+          [ -n "${ONLY:-}" ] && args+=(--only "$ONLY")
+          bash scripts/02_unpack.sh "${args[@]}"
 
       - name: 03 debloat
         run: bash scripts/03_debloat.sh --profile "${{ inputs.debloat_profile }}"
@@ -137,6 +181,7 @@ jobs:
             echo "| 源机型 | ${{ inputs.source }} |"
             echo "| 精简档位 | ${{ inputs.debloat_profile }} |"
             echo "| 内核 | ${{ inputs.build_kernel }} |"
+            echo "| 固件 | ${{ steps.resolve.outputs.url }} |"
             echo "| run | #${{ github.run_number }} |"
             echo
             for f in out/ported/port-report.md work/debloated/debloat-report.txt out/verify-report.txt; do
@@ -144,7 +189,7 @@ jobs:
               echo "<details><summary>$f</summary>"
               echo
               echo '```'
-              head -80 "$f"
+              head -100 "$f"
               echo '```'
               echo
               echo "</details>"
@@ -178,5 +223,5 @@ jobs:
             gh release create "$TAG" out/package/* \
               --title "nabu-os4-port $TAG" \
               --notes "源机型 ${{ inputs.source }}，精简档位 ${{ inputs.debloat_profile }}，run #${{ github.run_number }}。
-          仅镜像级自检通过，未在真机验证。刷写前请读包内 README-FLASH.txt。"
+仅镜像级自检通过，未在真机验证。刷写前请读包内 README-FLASH.txt。"
           fi

@@ -85,19 +85,31 @@ nabu 自己   ──►  vendor / odm / vendor_dlkm / dtbo / vendor_boot
 
 产物：`nabu-kernel-<branch>-<sha>.zip`（AnyKernel3）、裸 `Image`、`SHA256SUMS.kernel`。
 
-### ROM（需要你给固件地址）
+### ROM
 
 `Actions → build-rom → Run workflow`
 
 | 输入 | 必填 | 说明 |
 | --- | --- | --- |
-| `rom_url` | ✅ | OS4 源固件的 OTA zip 直链（或你自己 Release 里的资产） |
-| `rom_sha256` | 建议 | 5–7 GB 下载被截断很常见 |
-| `source` | ✅ | `pad8` / `pad8pro` / `pad7` / `pad7pro` / `pad6spro` / `kpad2` |
-| `debloat_profile` | ✅ | `none` / `minimal` / `balanced` / `aggressive` |
+| `source` | ✅ | 源机型**代号**：`yupei`(Pad 8/9) `piano`(Pad 8 Pro) `uke`(Pad 7) `muyu`(Pad 7 Pro) `jinghu`(Pad 7 Ultra) `violin`(Pad 7S Pro) `yili`(K Pad 2) `yingtian`(Pad 9 Pro Max) |
+| `rom_url` | 空即可 | 留空 ⇒ 按 `source` 现查最新 OS4 固件并自动挑可用镜像；填了就完全走你给的链接 |
+| `rom_sha256` | 可选 | 留空只记录不校验（第一次跑用它拿到值） |
+| `debloat_profile` | ✅ | `none` / `minimal` / `balanced` / `aggressive`（首次建议 `none` 或 `minimal`） |
+| `parts_only` | ✅ | 只解这些分区，默认 `system,product,system_ext,boot`（省 3–4 GB） |
 | `build_kernel` | ✅ | 关掉就只出 system 侧 |
 | `strict` | ✅ | 移植层校验失败即中止（首次试移植建议关） |
 | `release_tag` | 空 | 非空则发布到 Release |
+
+**没有固件地址也不用自己找**：
+
+```bash
+node tools/findrom.js --list                  # 哪些平板有 OS4 条目
+node tools/findrom.js --device uke --check     # 打印能通的直链 + 真实大小
+```
+
+它会从 [XiaomiFirmwareUpdater](https://github.com/XiaomiFirmwareUpdater/miui-updates-tracker)
+的索引里取最新 OS4 包，并按实测结果挑镜像域名（`bigota` / `hugeota` 会 403，`cdnorg` 正常）。
+体积、磁盘预算、Recovery/Fastboot 两种包型的取舍都在 [docs/FIRMWARE.md](docs/FIRMWARE.md)。
 
 产物按 1.8 GiB 切分，附 `port-report.md` / `debloat-report.txt` / `verify-report.txt`。
 
@@ -157,8 +169,8 @@ kernel/source.toml         内核源码 / 工具链 / 补丁 / 配置片段
 kernel/patches/            autosleep 两项补丁
 kernel/configs/            perf / suspend 片段
 scripts/00..07 + lib      流水线各阶段
-tools/                     AXML 解析、包匹配、属性注入、boot.img repack
-docs/                      PORTING / KERNEL / DEBLOAT / CI / STATUS
+tools/                     AXML 解析、包匹配、属性注入、boot.img repack、固件解析
+docs/                      PORTING / KERNEL / DEBLOAT / CI / FIRMWARE / STATUS
 ```
 
 ## 已知风险（按优先级）

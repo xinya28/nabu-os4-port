@@ -41,6 +41,7 @@ jobs:
         run: |
           python3 -m py_compile tools/*.py
           node --check tools/repack_boot.js
+          node --check tools/findrom.js
 
       - name: 自检
         run: bash scripts/selftest.sh

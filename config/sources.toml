@@ -1,49 +1,77 @@
 # 源机型登记表 —— 澎湃OS 4（Android 17）平板
 #
-# 用途：给 build-rom.yml 的 `source` 选择项提供 id → 显示名/谱系的映射，
-# 以及记录"这台机器的 system 侧与 nabu 差在哪"。
+# 代号是**权威的**：来自 XiaomiFirmwareUpdater 的设备索引，和 tracker 里的
+# `codename` 字段一一对应，`tools/findrom.js --device <代号>` 就是用这个键查固件。
+# 版本号/体积是 2026-11-27 从 tracker 抓到的快照，只作参考——真正构建时由
+# findrom 现取，不要把它当成"固定输入"。
 #
-# 注意：这里不含、也不要放 ROM 下载地址。ROM 一律由 workflow_dispatch 的
-# rom_url 传入（或用你自己的 Release 资产），原因是小米 CDN 的直链带时效签名，
-# 写死在仓库里必然过期。
+# 这里依然**不含下载地址**。原因见 docs/FIRMWARE.md：
+#   1) 直链随版本变化，写死必然过期；
+#   2) 同一个链接在不同镜像域名上可用性不同（实测 bigota 403、cdnorg 206）；
+#   3) 固件是厂商二进制，不该进公开仓库。
 #
-# `recommended` 只是一个默认值，不代表技术上最优：
-# 选源机型时优先看 ①有没有 tablet 专属框架（so 比例、平行视界）
-# ②屏幕分辨率/DPI 是否接近 nabu 的 2560x1600@320 ← 越接近，overlay 越少。
+# 选源机型时优先看：
+#   ① 屏幕分辨率/DPI 是否接近 nabu 的 2560x1600@320（越接近，overlay 越少）
+#   ② tablet 框架完整度（OS4 首批机型最全）
+#   ③ 有没有 tablet 专属配件框架（笔/键盘盖），对笔相关组件有参考价值
 
 [[source]]
-id          = "pad8"
-model       = "Xiaomi Pad 8"
-os          = "OS4 / Android 17"
+codename = "yupei"
+model    = "Xiaomi Pad 8 / Pad 9（中国）"
+os4      = "OS4.0.12.0.XPZCNXM"
+size     = "10.1 GB (Recovery) / 11.8 GB (Fastboot)"
 recommended = true
-note        = "OS4 首批机型；tablet 框架最完整，作为默认基线"
+note     = "OS4 主线、tablet 框架最完整，作为默认源；Pad 8 与 Pad 9 同代号（同机型不同命名）"
 
 [[source]]
-id   = "pad8pro"
-model = "Xiaomi Pad 8 Pro"
-os   = "OS4 / Android 17"
-note = "与 pad8 同代，系统镜像差异主要在性能配置与相机，可互为备份源"
+codename = "piano"
+model    = "Xiaomi Pad 8 Pro"
+os4      = "OS4.0.6.0.XPYCNXM"
+size     = "10.3 GB (Recovery) / 11.8 GB (Fastboot)"
+note     = "与 yupei 同代；系统镜像差异主要在性能配置与相机，可互为备份源"
 
 [[source]]
-id   = "pad7"
-model = "Xiaomi Pad 7"
-os   = "OS4 第三批 / Android 17"
-note = "11.2 英寸 3200x2136，分辨率比 nabu 高一档，overlay 里要压 dpi"
+codename = "uke"
+model    = "Xiaomi Pad 7（中国）"
+os4      = "OS4.0.4.0.XOZCNXM"
+size     = "9.1 GB (Recovery) / 10.5 GB (Fastboot)"
+note     = "11.2 英寸 3200x2136，分辨率比 nabu 高一档；体积最小的一批，适合先把链路跑通"
 
 [[source]]
-id   = "pad7pro"
-model = "Xiaomi Pad 7 Pro"
-os   = "OS4 第三批 / Android 17"
-note = "与 pad7 同分辨率；带键盘/笔的配件框架，笔相关组件值得参考"
+codename = "muyu"
+model    = "Xiaomi Pad 7 Pro"
+os4      = "OS4.0.4.0.XOYCNXM"
+size     = "9.1 GB (Recovery) / 10.5 GB (Fastboot)"
+note     = "与 uke 同分辨率；带笔/键盘盖配件框架，笔相关组件值得参考"
 
 [[source]]
-id   = "pad6spro"
-model = "Xiaomi Pad 6S Pro 12.4"
-os   = "OS4 第三批 / Android 17"
-note = "12.4 英寸 3048x2032；大屏布局，作 backup 源"
+codename = "jinghu"
+model    = "Xiaomi Pad 7 Ultra"
+os4      = "OS4.0.5.0.XOXCNXM"
+size     = "8.7 GB (Recovery) / 9.7 GB (Fastboot)"
+note     = "体积最小；大屏旗舰布局，作 backup 源"
 
 [[source]]
-id   = "kpad2"
-model = "REDMI K Pad 2"
-os   = "OS4 / Android 17"
-note = "8.8 英寸小屏，分辨率最接近 nabu 的纵向像素数；作对照源"
+codename = "violin"
+model    = "Xiaomi Pad 7S Pro 12.5"
+os4      = "OS4.0.6.0.XOTCNXM"
+size     = "8.8 GB (Recovery) / 10.2 GB (Fastboot)"
+note     = "12.5 英寸，大屏布局参考"
+
+[[source]]
+codename = "yili"
+model    = "REDMI K Pad 2"
+os4      = "OS4.0.4.0.XAKCNXM"
+size     = "8.6 GB (Recovery) / 10.4 GB (Fastboot)"
+note     = "8.8 英寸小屏，纵向像素最接近 nabu；作对照源"
+
+[[source]]
+codename = "yingtian"
+model    = "Xiaomi Pad 9 Pro Max"
+os4      = "OS4.0.21.0.XBMCNXM"
+size     = "10.6 GB (Recovery) / 12.9 GB (Fastboot)"
+note     = "最新但不是首批，稳定性未知；体积最大"
+
+# ── 备注 ──────────────────────────────────────────────────────────────────
+# sheng（Xiaomi Pad 6S Pro 12.4）在 tracker 里**没有** android 17 条目，
+# 也就是说它目前没有 OS4 正式版可作源。不要把它写进 workflow 的选项里。
