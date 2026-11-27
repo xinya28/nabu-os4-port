@@ -14,10 +14,10 @@
 | 02 unpack | 🧪 已实现，未实跑 | `payload.bin` 路径依赖 payload-dumper-go 2.1.0（已核对资产名）；tgz 路径需自备 `lpunpack` |
 | 03 debloat | 🧪 已实现，未用真实 ROM 跑过 | AXML 解析器只在合成数据上测过；`packages.txt` 未经真实固件校准 |
 | 04 port | 🧪 已实现，未实跑 | 属性注入有自检；vndk/tablet 校验逻辑未经真实镜像触发 |
-| 05 kernel | ✅ **已在真机验证** | 同一套补丁/配置/打包路径在此前的内核 CI 上构建并 `fastboot boot` 验证（详见 KERNEL.md 第 5 节） |
+| 05 kernel | ✅ **CI 全绿 + 已在真机验证** | 2026-11-27 `build-kernel` run #5（`d5e1616`）全绿：`Image` 45 MB、`ARMd` magic 正确、AnyKernel3 zip 22 MB 已上传为 artifact #15198900145；vermagic = `4.14.180-perf-perf SMP preempt mod_unload modversions aarch64`，`CONFIG_MODVERSIONS=y / MODULE_UNLOAD=y / KPROBES=y / KSU=y`。更早的同一套补丁/配置曾在真机 `fastboot boot` 验证（KERNEL.md 第 5 节） |
 | 06 package | 🧪 已实现，未实跑 | 切分 + 重建 SHA256SUMS 的逻辑未在 >2 GiB 产物上验证过 |
 | 07 verify | 🧪 已实现，未实跑 | boot.img 的结构断言（header v3 / ARMd）逻辑正确，但未跑过真实产物 |
-| lint / selftest | ✅ **CI 已通过** | 2026-11-27 `lint` run #4（commit `d0fa5c8`）：shellcheck 0 告警、python 语法、`selftest.sh` 全绿（含 mkfs.erofs→detect_fs→dump.erofs 往返） |
+| lint / selftest | ✅ **CI 已通过** | `lint` run #7（`d5e1616`）全绿：shellcheck 0 告警、python 语法、`selftest.sh`（含 mkfs.erofs→detect_fs→dump.erofs 往返）、TOML 解析 |
 
 ## 2. 关键结论
 
@@ -36,7 +36,16 @@
 - 没有在 nabu 上刷过 OS4 的任何一份 system 镜像；
 - 没有做 vendor sepolicy 合并、没有做相机/蜂窝适配；
 - 没有处理 OS4 的 `super` 布局（只按逻辑分区刷写，不重建 super）；
-- 没有 CI 实跑记录（仓库刚建，第一次 dispatch 之后应回填这张表）。
+- ROM 段没有 CI 实跑记录：`build-rom` 需要一份真实的 OS4 固件地址，仓库里没有；
+  内核段已有实跑记录（`build-kernel` run #5 全绿，见第 1 节）。
+
+### 已经由 CI 证明的"脚本本身能跑"
+
+内核段从 clone 上游 → 打两个 autosleep 补丁 → 追加 Makefile → 合并配置片段 →
+下载 LLVM 20.1.8 → 编译（首轮 `-Werror=unused-but-set-variable` 失败后按设计用
+`KCFLAGS` 重试成功）→ 从 `Image.gz-dtb` 解出裸 `Image` → AnyKernel3 打包 → 上传，
+每一步都在这条流水线里真的执行过。这一段的脚本错误已经清掉了；
+ROM 段的脚本只通过了静态门禁，还没有跑过真实镜像。
 
 ## 4. 下一步该按什么顺序做
 
