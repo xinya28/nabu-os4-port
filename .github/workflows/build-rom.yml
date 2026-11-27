@@ -215,13 +215,25 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.release_tag }}
+          SRC: ${{ inputs.source }}
+          PROFILE: ${{ inputs.debloat_profile }}
+          RUNNO: ${{ github.run_number }}
         run: |
           set -euo pipefail
+          # 说明单独写文件：--notes 里多行文本会把 run: | 的块标量截断
+          # （缩进小于块缩进的行会结束标量，整个 workflow 直接解析失败）
+          notes="$(mktemp)"
+          {
+            echo "nabu-os4-port $TAG"
+            echo
+            echo "源机型: $SRC    精简档位: $PROFILE    run: #$RUNNO"
+            echo
+            echo "仅镜像级自检通过，未在真机验证。刷写前请读包内 README-FLASH.txt。"
+          } > "$notes"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" out/package/* --clobber
           else
             gh release create "$TAG" out/package/* \
               --title "nabu-os4-port $TAG" \
-              --notes "源机型 ${{ inputs.source }}，精简档位 ${{ inputs.debloat_profile }}，run #${{ github.run_number }}。
-仅镜像级自检通过，未在真机验证。刷写前请读包内 README-FLASH.txt。"
+              --notes-file "$notes"
           fi

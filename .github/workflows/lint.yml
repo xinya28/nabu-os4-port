@@ -27,7 +27,26 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            erofs-utils android-sdk-libsparse-utils zstd shellcheck python3 file xxd
+            erofs-utils android-sdk-libsparse-utils zstd shellcheck python3 file xxd \
+            python3-yaml
+
+      - name: workflow 语法
+        run: |
+          # 这条检查是有来由的：build-rom.yml 曾经因为 --notes 里一行顶格续行
+          # 把 run: | 的块标量提前截断，GitHub 直接判"无效工作流"——那种失败
+          # 没有 job、没有日志，只能靠 dispatch 被 422 才发现。
+          python3 - <<'PY'
+          import glob, sys, yaml
+          bad = 0
+          for f in sorted(glob.glob(".github/workflows/*.yml")):
+              try:
+                  yaml.safe_load(open(f, encoding="utf-8"))
+                  print(f"ok   {f}")
+              except Exception as e:
+                  bad += 1
+                  print(f"FAIL {f}: {e}")
+          sys.exit(1 if bad else 0)
+          PY
 
       - name: shellcheck
         run: |
