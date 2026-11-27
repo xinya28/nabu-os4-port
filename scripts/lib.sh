@@ -107,8 +107,16 @@ fetch() {
     *)
       need_cmd curl
       log "download $url"
-      curl -fL --retry 5 --retry-delay 5 --connect-timeout 30 \
-           --retry-all-errors -C - -o "$dest" "$url" \
+      # 9-13 GB 的固件下载是整条链路最脆的一步（实测 9.1 GB 跑 30+ 分钟）。
+      #   --speed-limit/--speed-time：低于 50 KB/s 持续 2 分钟就判定卡死并中断，
+      #     否则一次"连上了但不动"的连接会挂到 job 超时（350 分钟）为止；
+      #   --retry + -C -：中断后从断点续传，不会从头再下 9 GB；
+      #   --max-time 3h：兜底，避免无限等待。
+      curl -fL --retry 5 --retry-delay 5 --retry-all-errors \
+           --connect-timeout 30 \
+           --speed-limit 51200 --speed-time 120 \
+           --max-time 10800 \
+           -C - -o "$dest" "$url" \
         || die "下载失败：$url"
       ;;
   esac
